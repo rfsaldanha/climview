@@ -5,7 +5,7 @@ library(bslib)
 # Interface
 ui <- page_navbar(
   title = "ClimView", 
-  theme = bs_theme(bootswatch = "solar"),
+  theme = bs_theme(bootswatch = "shiny"),
 
   # Logo
   tags$head(
