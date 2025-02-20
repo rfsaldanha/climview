@@ -33,7 +33,7 @@ u2_normal <- tbl(con, "u2_normal")
 
 # Interface
 ui <- page_navbar(
-  title = "ClimView", 
+  title = "Indicadores climatológicos para saúde", 
   theme = bs_theme(bootswatch = "shiny"),
 
   # Logo
