@@ -4,6 +4,7 @@ library(bslib)
 library(dplyr)
 library(duckdb)
 library(DBI)
+library(vchartr)
 
 # Database connection
 con <- dbConnect(duckdb(), "climindi.duckdb", read_only = TRUE)
@@ -85,17 +86,57 @@ ui <- page_navbar(
     # Sidebar
     layout_sidebar(
       sidebar = sidebar(
-        
+        open = "always",
+        accordion(
+          multiple = FALSE,
+          accordion_panel(
+            "Temperatura máxima",
+            checkboxInput(
+              inputId = "tmax_obs_sel",
+              label = "Temperatura máxima observada",
+              value = TRUE
+            ),
+            selectizeInput(
+              inputId = "tmax_indi_sel",
+              label = "Indicadores mensais",
+              choices = c("Média", "Mediana", "Desvio padrão", "Percentil 10", "Percentil 25", "Percentil 75", "Percentil 90", "Onda de calor 3 dias", "Onda de calor 5 dias", "Dias quentes", "Dias acima de 25 graus", "Dias acima de 30 graus", "Dias acima de 35 graus", "Dias acima de 40 graus"), 
+              multiple = TRUE
+            ),
+            selectizeInput(
+              inputId = "tmax_normal_sel",
+              label = "Normal 1961-1990",
+              choices = c("Média", "Percentil 10", "Percentil 90"), 
+              multiple = TRUE
+            )
+          ),
+          accordion_panel(
+            "Temperatura mínima"
+          ),
+          accordion_panel(
+            "Precipitação"
+          ),
+          accordion_panel(
+            "Umidade relativa"
+          ),
+          accordion_panel(
+            "Radiação solar"
+          ),
+          accordion_panel(
+            "Velocidade do vento"
+          ),
+          accordion_panel(
+            "Evapotranspiração"
+          )
+        )
       ),
 
-      # Card
+      # Visualization
       card(
-        full_screen = TRUE,
         card_body(
-          class = "p-0" # Fill card, used for maps
+          class = "p-0", # Fill card, used for maps,
+          vchartOutput(outputId = "main_graph", height = "auto")
         )
       )
-
     )
   ),
 
@@ -126,6 +167,35 @@ ui <- page_navbar(
 
 # Server
 server <- function(input, output, session) {
+  # Main graph
+  output$main_graph <- renderVchart({
+    co2_emissions %>% 
+  filter(country %in% c("China", "United States", "India")) %>% 
+  vchart() %>% 
+  v_line(
+    aes(year, co2, color = country)
+  ) %>% 
+  v_specs_datazoom(
+    start = "{label:.0f}",
+    startValue = 2000, 
+    end = "{label:.0f}"
+  ) %>% 
+  v_specs_legend(
+    orient = "top",
+    position = "start",
+    layout = "vertical",
+    layoutType = "absolute",
+    left = 30,
+    top = 20,
+    item = list(
+      shape = list(
+        style = list(
+          symbolType = "roundLine"
+        )
+      )
+    )
+  )
+  })
   
 
 }
