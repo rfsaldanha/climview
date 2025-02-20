@@ -64,12 +64,10 @@ dbExecute(con, glue("CREATE TABLE u2_indi AS SELECT * FROM '{u2_indi}'"))
 dbExecute(con, glue("CREATE TABLE u2_normal AS SELECT * FROM '{u2_normal}'"))
 dbExecute(con, glue("CREATE TABLE u2 AS SELECT * FROM '{u2}'"))
 
-
-
-
-
-
 ## Tests
 dbListTables(con)
 
 tbl(con, "pr_normal") |> head(100) |> collect() |> View()
+
+# Disconnect database
+dbDisconnect(con)
