@@ -3,6 +3,33 @@ library(shiny)
 library(bslib)
 library(dplyr)
 library(duckdb)
+library(DBI)
+
+# Database connection
+con <- dbConnect(duckdb(), "climindi.duckdb", read_only = TRUE)
+
+# Tables definitions
+eto <- tbl(con, "eto")
+eto_indi <- tbl(con, "eto_indi")
+eto_normal <- tbl(con, "eto_normal")
+pr <- tbl(con, "pr")
+pr_indi <- tbl(con, "pr_indi")
+pr_normal <- tbl(con, "pr_normal")
+rh <- tbl(con, "rh")
+rh_indi <- tbl(con, "rh_indi")
+rh_normal <- tbl(con, "rh_normal")
+rs <- tbl(con, "rs")
+rs_indi <- tbl(con, "rs_indi")
+rs_normal <- tbl(con, "rs_normal")
+tmax <- tbl(con, "tmax")
+tmax_indi <- tbl(con, "tmax_indi")
+tmax_normal <- tbl(con, "tmax_normal")
+tmin <- tbl(con, "tmin")
+tmin_indi <- tbl(con, "tmin_indi")
+tmin_normal <- tbl(con, "tmin_normal")
+u2 <- tbl(con, "u2")
+u2_indi <- tbl(con, "u2_indi")
+u2_normal <- tbl(con, "u2_normal")
 
 # Interface
 ui <- page_navbar(
