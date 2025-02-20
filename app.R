@@ -1,6 +1,8 @@
 # Packages
 library(shiny)
 library(bslib)
+library(dplyr)
+library(duckdb)
 
 # Interface
 ui <- page_navbar(
