@@ -36,23 +36,30 @@ u2_normal <- tbl(con, "u2_normal")
 
 # Interface
 ui <- page_navbar(
-  title = "Indicadores climatológicos para saúde", 
+  title = "Indicadores climatológicos para saúde",
   theme = bs_theme(bootswatch = "shiny"),
 
   # Logo
   tags$head(
     tags$script(
-      HTML('$(document).ready(function() {
+      HTML(
+        '$(document).ready(function() {
              $(".navbar .container-fluid")
                .append("<img id = \'myImage\' src=\'selo_obs_h.png\' align=\'right\' height = \'57.5px\'>"  );
-            });')),
+            });'
+      )
+    ),
     tags$style(
-      HTML('@media (max-width:992px) { #myImage { position: fixed; right: 10%; top: 0.5%; }}')
-    )),
+      HTML(
+        '@media (max-width:992px) { #myImage { position: fixed; right: 10%; top: 0.5%; }}'
+      )
+    )
+  ),
 
   # Translation
   tags$script(
-    HTML("
+    HTML(
+      "
       $(document).ready(function() {
         // Change the text 'Expand' in all tooltips
         $('.card.bslib-card bslib-tooltip > div').each(function() {
@@ -78,7 +85,8 @@ ui <- page_navbar(
           });
         });
       });
-    ")
+    "
+    )
   ),
 
   # Map page
@@ -91,7 +99,7 @@ ui <- page_navbar(
         open = "always",
         selectizeInput(
           inputId = "mun_sel",
-          label = "Município", 
+          label = "Município",
           choices = NULL
         ),
         accordion(
@@ -106,13 +114,28 @@ ui <- page_navbar(
             selectizeInput(
               inputId = "tmax_indi_sel",
               label = "Indicadores mensais",
-              choices = c("Média" = "mean", "Mediana" = "median", "Desvio padrão" = "sd", "Percentil 10" = "p10", "Percentil 25" = "p25", "Percentil 75" = "p75", "Percentil 90" = "p90", "Onda de calor 3 dias" = "heat_waves_3d", "Onda de calor 5 dias" = "heat_waves_5d", "Dias quentes" = "hot_days", "Dias acima de 25 graus" = "t_25", "Dias acima de 30 graus" = "t_30", "Dias acima de 35 graus" = "t_35", "Dias acima de 40 graus" = "t_40"), 
+              choices = c(
+                "Média" = "mean",
+                "Mediana" = "median",
+                "Desvio padrão" = "sd",
+                "Percentil 10" = "p10",
+                "Percentil 25" = "p25",
+                "Percentil 75" = "p75",
+                "Percentil 90" = "p90",
+                "Onda de calor 3 dias" = "heat_waves_3d",
+                "Onda de calor 5 dias" = "heat_waves_5d",
+                "Dias quentes" = "hot_days",
+                "Dias acima de 25 graus" = "t_25",
+                "Dias acima de 30 graus" = "t_30",
+                "Dias acima de 35 graus" = "t_35",
+                "Dias acima de 40 graus" = "t_40"
+              ),
               multiple = TRUE
             ),
             selectizeInput(
               inputId = "tmax_normal_sel",
               label = "Normal 1961-1990",
-              choices = c("Média", "Percentil 10", "Percentil 90"), 
+              choices = c("Média", "Percentil 10", "Percentil 90"),
               multiple = TRUE
             )
           ),
@@ -190,7 +213,7 @@ server <- function(input, output, session) {
     print(input$tmax_obs_sel)
 
     # tmax obs
-    if(input$tmax_obs_sel == TRUE){
+    if (input$tmax_obs_sel == TRUE) {
       tmp1 <- tmax |>
         filter(name == "Tmax_3.2.3_mean") |>
         filter(code_muni == input$mun_sel) |>
@@ -199,17 +222,17 @@ server <- function(input, output, session) {
         mutate(
           name = "Temperatura máxima"
         )
-    } else if(input$tmax_obs_sel == FALSE) {
+    } else if (input$tmax_obs_sel == FALSE) {
       tmp1 <- tibble()
     }
 
     # tmax indi
-    if(length(input$tmax_indi_sel) > 0){
+    if (length(input$tmax_indi_sel) > 0) {
       tmp2 <- tmax_indi |>
         filter(code_muni == input$mun_sel) |>
         select(year, month, all_of(input$tmax_indi_sel)) |>
         collect() |>
-        mutate(date = as.Date(paste0(year,"-",month,"-1"))) |>
+        mutate(date = as.Date(paste0(year, "-", month, "-1"))) |>
         select(-year, -month) |>
         relocate(date) |>
         pivot_longer(cols = input$tmax_indi_sel)
@@ -226,19 +249,16 @@ server <- function(input, output, session) {
     res <- graph_data()
 
     # Check size
-    if(nrow(res) > 0){
+    if (nrow(res) > 0) {
       # Plot
       vchart(data = res) |>
         v_line(
-          aes(x = date, y = value, color = name), 
+          aes(x = date, y = value, color = name),
           line = list(style = list(opacity = 0.5))
         ) |>
-          v_specs_datazoom()
+        v_specs_datazoom()
     }
-    
   })
-  
-
 }
 
 shinyApp(ui, server)
