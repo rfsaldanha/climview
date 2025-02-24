@@ -2,6 +2,8 @@
 library(shiny)
 library(bslib)
 library(dplyr)
+library(tibble)
+library(tidyr)
 library(duckdb)
 library(DBI)
 library(vchartr)
@@ -87,19 +89,24 @@ ui <- page_navbar(
     layout_sidebar(
       sidebar = sidebar(
         open = "always",
+        selectizeInput(
+          inputId = "mun_sel",
+          label = "Município", 
+          choices = NULL
+        ),
         accordion(
           multiple = FALSE,
           accordion_panel(
             "Temperatura máxima",
             checkboxInput(
               inputId = "tmax_obs_sel",
-              label = "Temperatura máxima observada",
+              label = "Temperatura máxima diária",
               value = TRUE
             ),
             selectizeInput(
               inputId = "tmax_indi_sel",
               label = "Indicadores mensais",
-              choices = c("Média", "Mediana", "Desvio padrão", "Percentil 10", "Percentil 25", "Percentil 75", "Percentil 90", "Onda de calor 3 dias", "Onda de calor 5 dias", "Dias quentes", "Dias acima de 25 graus", "Dias acima de 30 graus", "Dias acima de 35 graus", "Dias acima de 40 graus"), 
+              choices = c("Média" = "mean", "Mediana" = "median", "Desvio padrão" = "sd", "Percentil 10" = "p10", "Percentil 25" = "p25", "Percentil 75" = "p75", "Percentil 90" = "p90", "Onda de calor 3 dias" = "heat_waves_3d", "Onda de calor 5 dias" = "heat_waves_5d", "Dias quentes" = "hot_days", "Dias acima de 25 graus" = "t_25", "Dias acima de 30 graus" = "t_30", "Dias acima de 35 graus" = "t_35", "Dias acima de 40 graus" = "t_40"), 
               multiple = TRUE
             ),
             selectizeInput(
@@ -167,34 +174,68 @@ ui <- page_navbar(
 
 # Server
 server <- function(input, output, session) {
-  # Main graph
-  output$main_graph <- renderVchart({
-    co2_emissions %>% 
-  filter(country %in% c("China", "United States", "India")) %>% 
-  vchart() %>% 
-  v_line(
-    aes(year, co2, color = country)
-  ) %>% 
-  v_specs_datazoom(
-    start = "{label:.0f}",
-    startValue = 2000, 
-    end = "{label:.0f}"
-  ) %>% 
-  v_specs_legend(
-    orient = "top",
-    position = "start",
-    layout = "vertical",
-    layoutType = "absolute",
-    left = 30,
-    top = 20,
-    item = list(
-      shape = list(
-        style = list(
-          symbolType = "roundLine"
-        )
-      )
-    )
+  # Fill municipality selector
+  updateSelectizeInput(
+    session = session,
+    inputId = "mun_sel",
+    server = FALSE,
+    choices = c("3304557", "3303401", "1502103")
   )
+
+  # Observe indicator selection
+  graph_data <- reactive({
+    req(input$mun_sel)
+    #req(input$tmax_obs_sel)
+
+    print(input$tmax_obs_sel)
+
+    # tmax obs
+    if(input$tmax_obs_sel == TRUE){
+      tmp1 <- tmax |>
+        filter(name == "Tmax_3.2.3_mean") |>
+        filter(code_muni == input$mun_sel) |>
+        select(-code_muni, name) |>
+        collect() |>
+        mutate(
+          name = "Temperatura máxima"
+        )
+    } else if(input$tmax_obs_sel == FALSE) {
+      tmp1 <- tibble()
+    }
+
+    # tmax indi
+    if(length(input$tmax_indi_sel) > 0){
+      tmp2 <- tmax_indi |>
+        filter(code_muni == input$mun_sel) |>
+        select(year, month, all_of(input$tmax_indi_sel)) |>
+        collect() |>
+        mutate(date = as.Date(paste0(year,"-",month,"-1"))) |>
+        select(-year, -month) |>
+        relocate(date) |>
+        pivot_longer(cols = input$tmax_indi_sel)
+    } else {
+      tmp2 <- tibble()
+    }
+
+    bind_rows(tmp1, tmp2)
+  })
+
+  # Main graph (test)
+  output$main_graph <- renderVchart({
+    # Fetch data
+    res <- graph_data()
+
+    # Check size
+    if(nrow(res) > 0){
+      # Plot
+      vchart(data = res) |>
+        v_line(
+          aes(x = date, y = value, color = name), 
+          line = list(style = list(opacity = 0.5))
+        ) |>
+          v_specs_datazoom()
+    }
+    
   })
   
 
