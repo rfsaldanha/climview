@@ -34,9 +34,15 @@ u2 <- tbl(con, "u2")
 u2_indi <- tbl(con, "u2_indi")
 u2_normal <- tbl(con, "u2_normal")
 
+# Municipalities names
+mun_names <- readRDS("data/mun_names.rds")
+mun_list <- mun_names$code_muni
+names(mun_list) <- paste(mun_names$name_muni, "-", mun_names$abbrev_state)
+rm(mun_names)
+
 # Interface
 ui <- page_navbar(
-  title = "Indicadores climatológicos para saúde",
+  title = "Indicadores climatológicos municipais",
   theme = bs_theme(bootswatch = "shiny"),
   fillable = TRUE,
 
@@ -154,7 +160,53 @@ ui <- page_navbar(
             )
           ),
           accordion_panel(
-            "Temperatura mínima"
+            "Temperatura mínima",
+            checkboxInput(
+              inputId = "tmin_obs_sel",
+              label = "Temperatura mínima diária",
+              value = FALSE
+            ),
+            selectizeInput(
+              inputId = "tmin_indi_sel_uni",
+              label = "Indicadores mensais",
+              choices = c(
+                "Média" = "mean",
+                "Mediana" = "median",
+                "Desvio padrão" = "sd",
+                "Percentil 10" = "p10",
+                "Percentil 25" = "p25",
+                "Percentil 75" = "p75",
+                "Percentil 90" = "p90"
+              ),
+              multiple = TRUE,
+              selected = "p10"
+            ),
+            selectizeInput(
+              inputId = "tmin_normal_sel",
+              label = "Normal 1961-1990",
+              choices = c(
+                "Média" = "normal_mean",
+                "Percentil 10" = "normal_p10",
+                "Percentil 90" = "normal_p90"
+              ),
+              multiple = TRUE
+            ),
+            selectizeInput(
+              inputId = "tmin_indi_sel_count",
+              label = "Indicadores mensais (contagem)",
+              choices = c(
+                "Onda de frio 3 dias" = "cold_spells_3d",
+                "Onda de frio 5 dias" = "cold_spells_5d",
+                "Dias frios" = "cold_days",
+                "Dias abaixo de 0 graus" = "t_0",
+                "Dias abaixo de 5 graus" = "t_5",
+                "Dias abaixo de 10 graus" = "t_10",
+                "Dias abaixo de 15 graus" = "t_15",
+                "Dias abaixo de 20 graus" = "t_20"
+              ),
+              multiple = TRUE,
+              selected = "cold_days"
+            )
           ),
           accordion_panel(
             "Precipitação"
@@ -223,8 +275,8 @@ server <- function(input, output, session) {
   updateSelectizeInput(
     session = session,
     inputId = "mun_sel",
-    server = FALSE,
-    choices = c("3304557", "3303401", "1502103")
+    server = TRUE,
+    choices = mun_list
   )
 
   # Observe indicator selection
@@ -275,7 +327,51 @@ server <- function(input, output, session) {
       tmp3 <- tibble()
     }
 
-    bind_rows(tmp1, tmp2, tmp3)
+    # tmin obs
+    if (input$tmin_obs_sel == TRUE) {
+      tmp4 <- tmin |>
+        filter(name == "Tmin_3.2.3_mean") |>
+        filter(code_muni == input$mun_sel) |>
+        select(-code_muni, name) |>
+        collect() |>
+        mutate(
+          name = "Temperatura mínima"
+        )
+    } else if (input$tmin_obs_sel == FALSE) {
+      tmp4 <- tibble()
+    }
+
+    # tmin indi
+    if (length(input$tmin_indi_sel_uni) > 0) {
+      tmp5 <- tmin_indi |>
+        filter(code_muni == input$mun_sel) |>
+        select(year, month, all_of(input$tmin_indi_sel_uni)) |>
+        rename_with(~ paste0("tmin_", .), all_of(input$tmin_indi_sel_uni)) |>
+        collect() |>
+        mutate(date = as.Date(paste0(year, "-", month, "-1"))) |>
+        select(-year, -month) |>
+        relocate(date) |>
+        pivot_longer(cols = starts_with("tmin_"))
+    } else {
+      tmp5 <- tibble()
+    }
+
+    # tmin normal
+    if (length(input$tmin_normal_sel) > 0) {
+      tmp6 <- tmax_indi |>
+        filter(code_muni == input$mun_sel) |>
+        select(year, month, all_of(input$tmin_normal_sel)) |>
+        rename_with(~ paste0("tmin_", .), all_of(input$tmin_normal_sel)) |>
+        collect() |>
+        mutate(date = as.Date(paste0(year, "-", month, "-1"))) |>
+        select(-year, -month) |>
+        relocate(date) |>
+        pivot_longer(cols = starts_with("tmin_"))
+    } else {
+      tmp6 <- tibble()
+    }
+
+    bind_rows(tmp1, tmp2, tmp3, tmp4, tmp5, tmp6)
   })
 
   graph_data_count <- reactive({
@@ -296,7 +392,22 @@ server <- function(input, output, session) {
       tmp1 <- tibble()
     }
 
-    tmp1
+    # tmin indi
+    if (length(input$tmin_indi_sel_count) > 0) {
+      tmp2 <- tmin_indi |>
+        filter(code_muni == input$mun_sel) |>
+        select(year, month, all_of(input$tmin_indi_sel_count)) |>
+        rename_with(~ paste0("tmin_", .), all_of(input$tmin_indi_sel_count)) |>
+        collect() |>
+        mutate(date = as.Date(paste0(year, "-", month, "-1"))) |>
+        select(-year, -month) |>
+        relocate(date) |>
+        pivot_longer(cols = starts_with("tmin_"))
+    } else {
+      tmp2 <- tibble()
+    }
+
+    bind_rows(tmp1, tmp2)
   })
 
   # Graph unit
