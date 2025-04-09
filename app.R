@@ -38,6 +38,7 @@ u2_normal <- tbl(con, "u2_normal")
 ui <- page_navbar(
   title = "Indicadores climatológicos para saúde",
   theme = bs_theme(bootswatch = "shiny"),
+  fillable = TRUE,
 
   # Logo
   tags$head(
@@ -109,10 +110,10 @@ ui <- page_navbar(
             checkboxInput(
               inputId = "tmax_obs_sel",
               label = "Temperatura máxima diária",
-              value = TRUE
+              value = FALSE
             ),
             selectizeInput(
-              inputId = "tmax_indi_sel",
+              inputId = "tmax_indi_sel_uni",
               label = "Indicadores mensais",
               choices = c(
                 "Média" = "mean",
@@ -121,7 +122,25 @@ ui <- page_navbar(
                 "Percentil 10" = "p10",
                 "Percentil 25" = "p25",
                 "Percentil 75" = "p75",
-                "Percentil 90" = "p90",
+                "Percentil 90" = "p90"
+              ),
+              multiple = TRUE,
+              selected = "p90"
+            ),
+            selectizeInput(
+              inputId = "tmax_normal_sel",
+              label = "Normal 1961-1990",
+              choices = c(
+                "Média" = "normal_mean",
+                "Percentil 10" = "normal_p10",
+                "Percentil 90" = "normal_p90"
+              ),
+              multiple = TRUE
+            ),
+            selectizeInput(
+              inputId = "tmax_indi_sel_count",
+              label = "Indicadores mensais (contagem)",
+              choices = c(
                 "Onda de calor 3 dias" = "heat_waves_3d",
                 "Onda de calor 5 dias" = "heat_waves_5d",
                 "Dias quentes" = "hot_days",
@@ -130,13 +149,8 @@ ui <- page_navbar(
                 "Dias acima de 35 graus" = "t_35",
                 "Dias acima de 40 graus" = "t_40"
               ),
-              multiple = TRUE
-            ),
-            selectizeInput(
-              inputId = "tmax_normal_sel",
-              label = "Normal 1961-1990",
-              choices = c("Média", "Percentil 10", "Percentil 90"),
-              multiple = TRUE
+              multiple = TRUE,
+              selected = "hot_days"
             )
           ),
           accordion_panel(
@@ -162,9 +176,17 @@ ui <- page_navbar(
 
       # Visualization
       card(
+        height = "50%",
         card_body(
           class = "p-0", # Fill card, used for maps,
-          vchartOutput(outputId = "main_graph", height = "auto")
+          vchartOutput(outputId = "graph_uni", height = "auto")
+        )
+      ),
+      card(
+        height = "50%",
+        card_body(
+          class = "p-0", # Fill card, used for maps,
+          vchartOutput(outputId = "graph_count", height = "auto")
         )
       )
     )
@@ -206,11 +228,8 @@ server <- function(input, output, session) {
   )
 
   # Observe indicator selection
-  graph_data <- reactive({
+  graph_data_uni <- reactive({
     req(input$mun_sel)
-    #req(input$tmax_obs_sel)
-
-    print(input$tmax_obs_sel)
 
     # tmax obs
     if (input$tmax_obs_sel == TRUE) {
@@ -227,26 +246,80 @@ server <- function(input, output, session) {
     }
 
     # tmax indi
-    if (length(input$tmax_indi_sel) > 0) {
+    if (length(input$tmax_indi_sel_uni) > 0) {
       tmp2 <- tmax_indi |>
         filter(code_muni == input$mun_sel) |>
-        select(year, month, all_of(input$tmax_indi_sel)) |>
+        select(year, month, all_of(input$tmax_indi_sel_uni)) |>
+        rename_with(~ paste0("tmax_", .), all_of(input$tmax_indi_sel_uni)) |>
         collect() |>
         mutate(date = as.Date(paste0(year, "-", month, "-1"))) |>
         select(-year, -month) |>
         relocate(date) |>
-        pivot_longer(cols = input$tmax_indi_sel)
+        pivot_longer(cols = starts_with("tmax_"))
     } else {
       tmp2 <- tibble()
     }
 
-    bind_rows(tmp1, tmp2)
+    # tmax normal
+    if (length(input$tmax_normal_sel) > 0) {
+      tmp3 <- tmax_indi |>
+        filter(code_muni == input$mun_sel) |>
+        select(year, month, all_of(input$tmax_normal_sel)) |>
+        rename_with(~ paste0("tmax_", .), all_of(input$tmax_normal_sel)) |>
+        collect() |>
+        mutate(date = as.Date(paste0(year, "-", month, "-1"))) |>
+        select(-year, -month) |>
+        relocate(date) |>
+        pivot_longer(cols = starts_with("tmax_"))
+    } else {
+      tmp3 <- tibble()
+    }
+
+    bind_rows(tmp1, tmp2, tmp3)
   })
 
-  # Main graph (test)
-  output$main_graph <- renderVchart({
+  graph_data_count <- reactive({
+    req(input$mun_sel)
+
+    # tmax indi
+    if (length(input$tmax_indi_sel_count) > 0) {
+      tmp1 <- tmax_indi |>
+        filter(code_muni == input$mun_sel) |>
+        select(year, month, all_of(input$tmax_indi_sel_count)) |>
+        rename_with(~ paste0("tmax_", .), all_of(input$tmax_indi_sel_count)) |>
+        collect() |>
+        mutate(date = as.Date(paste0(year, "-", month, "-1"))) |>
+        select(-year, -month) |>
+        relocate(date) |>
+        pivot_longer(cols = starts_with("tmax_"))
+    } else {
+      tmp1 <- tibble()
+    }
+
+    tmp1
+  })
+
+  # Graph unit
+  output$graph_uni <- renderVchart({
     # Fetch data
-    res <- graph_data()
+    res <- graph_data_uni()
+
+    # Check size
+    if (nrow(res) > 0) {
+      # Plot
+      vchart(data = res) |>
+        v_line(
+          aes(x = date, y = value, color = name),
+          line = list(style = list(opacity = 0.5))
+        ) |>
+        v_specs_datazoom()
+    }
+  })
+
+  # Graph count
+  output$graph_count <- renderVchart({
+    # Fetch data
+    res <- graph_data_count()
 
     # Check size
     if (nrow(res) > 0) {
