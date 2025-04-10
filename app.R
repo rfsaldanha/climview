@@ -40,6 +40,13 @@ mun_list <- mun_names$code_muni
 names(mun_list) <- paste(mun_names$name_muni, "-", mun_names$abbrev_state)
 rm(mun_names)
 
+# Skelethon tibble
+tibble_sk <- tibble(
+  date = as.Date(NA),
+  value = numeric(),
+  name = character()
+)
+
 # Interface
 ui <- page_navbar(
   title = "Indicadores climatológicos municipais",
@@ -228,17 +235,9 @@ ui <- page_navbar(
 
       # Visualization
       card(
-        height = "50%",
         card_body(
           class = "p-0", # Fill card, used for maps,
-          vchartOutput(outputId = "graph_uni", height = "auto")
-        )
-      ),
-      card(
-        height = "50%",
-        card_body(
-          class = "p-0", # Fill card, used for maps,
-          vchartOutput(outputId = "graph_count", height = "auto")
+          vchartOutput(outputId = "graph", height = "auto")
         )
       )
     )
@@ -294,7 +293,7 @@ server <- function(input, output, session) {
           name = "Temperatura máxima"
         )
     } else if (input$tmax_obs_sel == FALSE) {
-      tmp1 <- tibble()
+      tmp1 <- tibble_sk
     }
 
     # tmax indi
@@ -309,7 +308,7 @@ server <- function(input, output, session) {
         relocate(date) |>
         pivot_longer(cols = starts_with("tmax_"))
     } else {
-      tmp2 <- tibble()
+      tmp2 <- tibble_sk
     }
 
     # tmax normal
@@ -324,7 +323,7 @@ server <- function(input, output, session) {
         relocate(date) |>
         pivot_longer(cols = starts_with("tmax_"))
     } else {
-      tmp3 <- tibble()
+      tmp3 <- tibble_sk
     }
 
     # tmin obs
@@ -338,7 +337,7 @@ server <- function(input, output, session) {
           name = "Temperatura mínima"
         )
     } else if (input$tmin_obs_sel == FALSE) {
-      tmp4 <- tibble()
+      tmp4 <- tibble_sk
     }
 
     # tmin indi
@@ -353,7 +352,7 @@ server <- function(input, output, session) {
         relocate(date) |>
         pivot_longer(cols = starts_with("tmin_"))
     } else {
-      tmp5 <- tibble()
+      tmp5 <- tibble_sk
     }
 
     # tmin normal
@@ -368,7 +367,7 @@ server <- function(input, output, session) {
         relocate(date) |>
         pivot_longer(cols = starts_with("tmin_"))
     } else {
-      tmp6 <- tibble()
+      tmp6 <- tibble_sk
     }
 
     bind_rows(tmp1, tmp2, tmp3, tmp4, tmp5, tmp6)
@@ -389,7 +388,7 @@ server <- function(input, output, session) {
         relocate(date) |>
         pivot_longer(cols = starts_with("tmax_"))
     } else {
-      tmp1 <- tibble()
+      tmp1 <- tibble_sk
     }
 
     # tmin indi
@@ -404,41 +403,45 @@ server <- function(input, output, session) {
         relocate(date) |>
         pivot_longer(cols = starts_with("tmin_"))
     } else {
-      tmp2 <- tibble()
+      tmp2 <- tibble_sk
     }
 
     bind_rows(tmp1, tmp2)
   })
 
-  # Graph unit
-  output$graph_uni <- renderVchart({
+  # Graph
+  output$graph <- renderVchart({
     # Fetch data
-    res <- graph_data_uni()
+    res_uni <- graph_data_uni()
+    res_count <- graph_data_count()
 
     # Check size
-    if (nrow(res) > 0) {
+    if (nrow(res_uni) > 0 | nrow(res_count) > 0) {
       # Plot
-      vchart(data = res) |>
+      vchart() |>
         v_line(
+          data = res_uni,
           aes(x = date, y = value, color = name),
+          serie_id = "uni",
+          name = "uni",
           line = list(style = list(opacity = 0.5))
         ) |>
-        v_specs_datazoom()
-    }
-  })
-
-  # Graph count
-  output$graph_count <- renderVchart({
-    # Fetch data
-    res <- graph_data_count()
-
-    # Check size
-    if (nrow(res) > 0) {
-      # Plot
-      vchart(data = res) |>
         v_line(
+          data = res_count,
           aes(x = date, y = value, color = name),
+          serie_id = "count",
+          name = "count",
           line = list(style = list(opacity = 0.5))
+        ) |>
+        v_scale_y_continuous(
+          seriesId = "uni",
+          name = "",
+          position = "left"
+        ) |>
+        v_scale_y_continuous(
+          seriesId = "count",
+          name = "",
+          position = "right"
         ) |>
         v_specs_datazoom()
     }
