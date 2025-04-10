@@ -109,6 +109,8 @@ ui <- page_navbar(
 
     # Sidebar
     layout_sidebar(
+      fill = TRUE,
+      fillable = TRUE,
       sidebar = sidebar(
         open = "always",
         selectizeInput(
@@ -185,8 +187,7 @@ ui <- page_navbar(
                 "Percentil 75" = "p75",
                 "Percentil 90" = "p90"
               ),
-              multiple = TRUE,
-              selected = "p10"
+              multiple = TRUE
             ),
             selectizeInput(
               inputId = "tmin_normal_sel",
@@ -211,12 +212,60 @@ ui <- page_navbar(
                 "Dias abaixo de 15 graus" = "t_15",
                 "Dias abaixo de 20 graus" = "t_20"
               ),
-              multiple = TRUE,
-              selected = "cold_days"
+              multiple = TRUE
             )
           ),
           accordion_panel(
-            "Precipitação"
+            "Precipitação",
+            checkboxInput(
+              inputId = "pr_obs_sel",
+              label = "Precipitação",
+              value = FALSE
+            ),
+            selectizeInput(
+              inputId = "pr_indi_sel_uni",
+              label = "Indicadores mensais",
+              choices = c(
+                "Média" = "mean",
+                "Mediana" = "median",
+                "Desvio padrão" = "sd",
+                "Percentil 10" = "p10",
+                "Percentil 25" = "p25",
+                "Percentil 75" = "p75",
+                "Percentil 90" = "p90"
+              ),
+              multiple = TRUE
+            ),
+            selectizeInput(
+              inputId = "pr_normal_sel",
+              label = "Normal 1961-1990",
+              choices = c(
+                "Média" = "normal_mean",
+                "Percentil 10" = "normal_p10",
+                "Percentil 90" = "normal_p90"
+              ),
+              multiple = TRUE
+            ),
+            selectizeInput(
+              inputId = "pr_indi_sel_count",
+              label = "Indicadores mensais (contagem)",
+              choices = c(
+                "Onda de chuvas 3 dias" = "rain_spells_3d",
+                "Onda de chuvas 5 dias" = "rain_spells_5d",
+                "Dias com chuva acima de 1mm" = "p_1",
+                "Dias com chuva acima de 5mm" = "p_5",
+                "Dias com chuva acima de 10mm" = "p_10",
+                "Dias com chuva acima de 50mm" = "p_50",
+                "Dias com chuva acima de 100mm" = "p_100",
+                "Três dias ou mais sem precipitação" = "d_3",
+                "Cinco dias ou mais sem precipitação" = "d_5",
+                "Dez dias ou mais sem precipitação" = "d_10",
+                "Quinze dias ou mais sem precipitação" = "d_15",
+                "Vinte dias ou mais sem precipitação" = "d_20",
+                "Vinte e cinco dias ou mais sem precipitação" = "d_25"
+              ),
+              multiple = TRUE
+            )
           ),
           accordion_panel(
             "Umidade relativa"
@@ -234,12 +283,7 @@ ui <- page_navbar(
       ),
 
       # Visualization
-      card(
-        card_body(
-          class = "p-0", # Fill card, used for maps,
-          vchartOutput(outputId = "graph", height = "auto")
-        )
-      )
+      uiOutput(outputId = "graph_cards")
     )
   ),
 
@@ -278,8 +322,8 @@ server <- function(input, output, session) {
     choices = mun_list
   )
 
-  # Observe indicator selection
-  graph_data_uni <- reactive({
+  # Temperature data
+  graph_data_temp <- reactive({
     req(input$mun_sel)
 
     # tmax obs
@@ -373,10 +417,62 @@ server <- function(input, output, session) {
     bind_rows(tmp1, tmp2, tmp3, tmp4, tmp5, tmp6)
   })
 
+  # Precipitation data
+  graph_data_pr <- reactive({
+    req(input$mun_sel)
+
+    # pr obs
+    if (input$pr_obs_sel == TRUE) {
+      tmp1 <- pr |>
+        filter(name == "pr_3.2.3_mean") |>
+        filter(code_muni == input$mun_sel) |>
+        select(-code_muni, name) |>
+        collect() |>
+        mutate(
+          name = "Precipitação"
+        )
+    } else if (input$tmax_obs_sel == FALSE) {
+      tmp1 <- tibble_sk
+    }
+
+    # pr indi
+    if (length(input$pr_indi_sel_uni) > 0) {
+      tmp2 <- pr_indi |>
+        filter(code_muni == input$mun_sel) |>
+        select(year, month, all_of(input$pr_indi_sel_uni)) |>
+        rename_with(~ paste0("pr_", .), all_of(input$pr_indi_sel_uni)) |>
+        collect() |>
+        mutate(date = as.Date(paste0(year, "-", month, "-1"))) |>
+        select(-year, -month) |>
+        relocate(date) |>
+        pivot_longer(cols = starts_with("pr_"))
+    } else {
+      tmp2 <- tibble_sk
+    }
+
+    # pr normal
+    if (length(input$pr_normal_sel) > 0) {
+      tmp3 <- pr_indi |>
+        filter(code_muni == input$mun_sel) |>
+        select(year, month, all_of(input$pr_normal_sel)) |>
+        rename_with(~ paste0("pr_", .), all_of(input$pr_normal_sel)) |>
+        collect() |>
+        mutate(date = as.Date(paste0(year, "-", month, "-1"))) |>
+        select(-year, -month) |>
+        relocate(date) |>
+        pivot_longer(cols = starts_with("pr_"))
+    } else {
+      tmp3 <- tibble_sk
+    }
+
+    bind_rows(tmp1, tmp2, tmp3)
+  })
+
+  # Count data
   graph_data_count <- reactive({
     req(input$mun_sel)
 
-    # tmax indi
+    # tmax
     if (length(input$tmax_indi_sel_count) > 0) {
       tmp1 <- tmax_indi |>
         filter(code_muni == input$mun_sel) |>
@@ -391,7 +487,7 @@ server <- function(input, output, session) {
       tmp1 <- tibble_sk
     }
 
-    # tmin indi
+    # tmin
     if (length(input$tmin_indi_sel_count) > 0) {
       tmp2 <- tmin_indi |>
         filter(code_muni == input$mun_sel) |>
@@ -406,45 +502,110 @@ server <- function(input, output, session) {
       tmp2 <- tibble_sk
     }
 
-    bind_rows(tmp1, tmp2)
+    # pr
+    if (length(input$pr_indi_sel_count) > 0) {
+      tmp3 <- pr_indi |>
+        filter(code_muni == input$mun_sel) |>
+        select(year, month, all_of(input$pr_indi_sel_count)) |>
+        rename_with(~ paste0("pr_", .), all_of(input$pr_indi_sel_count)) |>
+        collect() |>
+        mutate(date = as.Date(paste0(year, "-", month, "-1"))) |>
+        select(-year, -month) |>
+        relocate(date) |>
+        pivot_longer(cols = starts_with("pr_"))
+    } else {
+      tmp3 <- tibble_sk
+    }
+
+    bind_rows(tmp1, tmp2, tmp3)
   })
 
   # Graph
-  output$graph <- renderVchart({
+  output$graph_temp <- renderVchart({
     # Fetch data
-    res_uni <- graph_data_uni()
-    res_count <- graph_data_count()
+    res_temp <- graph_data_temp()
 
     # Check size
-    if (nrow(res_uni) > 0 | nrow(res_count) > 0) {
+    if (nrow(res_temp) > 0) {
       # Plot
       vchart() |>
         v_line(
-          data = res_uni,
+          data = res_temp,
           aes(x = date, y = value, color = name),
-          serie_id = "uni",
-          name = "uni",
+          serie_id = "temperature",
           line = list(style = list(opacity = 0.5))
         ) |>
+        v_scale_y_continuous(
+          seriesId = "temperature",
+          # name = "Celsius",
+          position = "left"
+        ) |>
+        v_specs_datazoom()
+    }
+  })
+
+  output$graph_pr <- renderVchart({
+    # Fetch data
+    res_pr <- graph_data_pr()
+
+    # Check size
+    if (nrow(res_pr) > 0) {
+      # Plot
+      vchart() |>
+        v_line(
+          data = res_pr,
+          aes(x = date, y = value, color = name),
+          serie_id = "precipitation",
+          line = list(style = list(opacity = 0.5))
+        ) |>
+        v_scale_y_continuous(
+          seriesId = "precipitation",
+          # name = "Celsius",
+          position = "left"
+        ) |>
+        v_specs_datazoom()
+    }
+  })
+
+  output$graph_count <- renderVchart({
+    # Fetch data
+    res_count <- graph_data_count()
+
+    # Check size
+    if (nrow(res_count) > 0) {
+      # Plot
+      vchart() |>
         v_line(
           data = res_count,
           aes(x = date, y = value, color = name),
           serie_id = "count",
-          name = "count",
           line = list(style = list(opacity = 0.5))
         ) |>
         v_scale_y_continuous(
-          seriesId = "uni",
-          name = "",
-          position = "left"
-        ) |>
-        v_scale_y_continuous(
           seriesId = "count",
-          name = "",
+          # name = "Count",
           position = "right"
         ) |>
         v_specs_datazoom()
     }
+  })
+
+  # Graph cards
+  output$graph_cards <- renderUI({
+    card(
+      card_body(
+        class = "p-0",
+        vchartOutput(outputId = "graph_temp", height = "auto")
+      ),
+      card_body(
+        class = "p-0",
+        vchartOutput(outputId = "graph_count", height = "auto")
+      ),
+      card_body(
+        class = "p-0",
+        vchartOutput(outputId = "graph_pr", height = "auto")
+      )
+    )
   })
 }
 
