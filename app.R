@@ -7,6 +7,7 @@ library(tidyr)
 library(duckdb)
 library(DBI)
 library(vchartr)
+library(plotly)
 
 # Database connection
 con <- dbConnect(duckdb(), "climindi.duckdb", read_only = TRUE)
@@ -283,7 +284,13 @@ ui <- page_navbar(
       ),
 
       # Visualization
-      uiOutput(outputId = "graph_cards")
+      # uiOutput(outputId = "graph_cards")
+      card(
+        card_body(
+          class = "p-0",
+          plotlyOutput(outputId = "graph")
+        )
+      )
     )
   ),
 
@@ -401,7 +408,7 @@ server <- function(input, output, session) {
 
     # tmin normal
     if (length(input$tmin_normal_sel) > 0) {
-      tmp6 <- tmax_indi |>
+      tmp6 <- tmin_indi |>
         filter(code_muni == input$mun_sel) |>
         select(year, month, all_of(input$tmin_normal_sel)) |>
         rename_with(~ paste0("tmin_", .), all_of(input$tmin_normal_sel)) |>
@@ -431,7 +438,7 @@ server <- function(input, output, session) {
         mutate(
           name = "Precipitação"
         )
-    } else if (input$tmax_obs_sel == FALSE) {
+    } else if (input$pr_obs_sel == FALSE) {
       tmp1 <- tibble_sk
     }
 
@@ -591,21 +598,54 @@ server <- function(input, output, session) {
   })
 
   # Graph cards
-  output$graph_cards <- renderUI({
-    card(
-      card_body(
-        class = "p-0",
-        vchartOutput(outputId = "graph_temp", height = "auto")
-      ),
-      card_body(
-        class = "p-0",
-        vchartOutput(outputId = "graph_count", height = "auto")
-      ),
-      card_body(
-        class = "p-0",
-        vchartOutput(outputId = "graph_pr", height = "auto")
+  output$graph <- renderPlotly({
+    # Fetch data
+    res_temp <- graph_data_temp()
+    res_pr <- graph_data_pr()
+    res_count <- graph_data_count()
+
+    plots <- list()
+
+    if (nrow(res_temp) > 0) {
+      temp_plot <- plot_ly(
+        data = res_temp,
+        x = ~date,
+        y = ~value,
+        type = 'scatter',
+        mode = 'lines',
+        color = ~name
       )
-    )
+
+      plots[["temp"]] <- plotly_build(temp_plot)
+    }
+
+    if (nrow(res_pr) > 0) {
+      pr_plot <- plot_ly(
+        data = res_pr,
+        x = ~date,
+        y = ~value,
+        type = 'scatter',
+        mode = 'lines',
+        color = ~name
+      )
+
+      plots[["pr"]] <- plotly_build(pr_plot)
+    }
+
+    if (nrow(res_count) > 0) {
+      count_plot <- plot_ly(
+        data = res_count,
+        x = ~date,
+        y = ~value,
+        type = 'scatter',
+        mode = 'lines',
+        color = ~name
+      )
+
+      plots[["count"]] <- plotly_build(count_plot)
+    }
+
+    subplot(plots, nrows = length(plots), shareX = TRUE)
   })
 }
 
